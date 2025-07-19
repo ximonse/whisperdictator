@@ -72,6 +72,7 @@ The AI prompt file allows non-technical users to customize behavior without touc
 - **Global hotkey doesn't work**: Reinstall with `pip install pynput`
 - **Microphone doesn't work**: Check Windows microphone settings
 - **Whisper is slow**: First time loads the model (may take 1-2 minutes)
+- Disable **Filter Keys** if you get blips or input issues. **How to disable it**: Open the *Control Panel** or go to **Settings > Accessibility > Keyboard** Locate **Filter Keys** Turn it **off**
 
 ## License
 
