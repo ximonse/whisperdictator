@@ -1,5 +1,4 @@
 # whisperdictator
-# Whisper Dictaphone
 
 A compact floating dictaphone with AI transcription and push-to-talk functionality.
 
