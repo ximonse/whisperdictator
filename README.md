@@ -1,6 +1,6 @@
-# whisperdictator
+# Whisperdictator
 
-A compact floating dictaphone with AI transcription and push-to-talk functionality.
+A compact floating dictaphone with Whisper (prepared) transcription and push-to-talk functionality.
 
 What started as a quick escape from studying turned into the familiar slippery slope of coding... "just a little voice recorder," I said. "It'll only take a minute," I said. Several hours later, here we are with push-to-talk, Whisper transcription, and way too many features for what was supposed to be a simple houer distraction.
 
