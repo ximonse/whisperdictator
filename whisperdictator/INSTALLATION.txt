@@ -1,0 +1,31 @@
+WHISPER DICTAPHONE - INSTALLATION
+==================================
+
+For Windows:
+1. Double-click "Installera_Allt.bat"
+2. Wait until installation is complete
+3. Double-click "Starta_Diktafon.bat"
+
+For other systems (Linux/Mac):
+1. pip install -r requirements.txt
+2. python Diktafon.py
+
+USAGE:
+- Click ▶ to start recording
+- Click ■ to stop and transcribe
+- Global hotkey: Right Shift + Right Arrow (push-to-talk)
+- ★ button copies text with AI-prompt for processing
+
+FEATURES:
+- Transparent floating widget (hover for full visibility)
+- Push-to-talk with global hotkey
+- Automatic transcription with Whisper
+- Saves both audio and text locally
+- Timer shows recording time
+
+REQUIREMENTS:
+- Python 3.7+
+- Microphone
+- Windows (for .bat files)
+
+Created by Claude Code 2025

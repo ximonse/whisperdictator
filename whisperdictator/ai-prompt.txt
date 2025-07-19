@@ -1,0 +1,1 @@
+Rewrite and organize the text clearly. Summarize the text. Convert events with dates to Google calendar events, convert tasks to task items, convert notes to Google Keep objects.
