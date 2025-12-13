@@ -9,11 +9,14 @@ import tempfile
 import os
 import whisper
 
-# Sätt FFmpeg-sökväg till lokala mappen
+# Sätt FFmpeg-sökväg (cross-platform)
+import platform
 script_dir = os.path.dirname(os.path.abspath(__file__))
-ffmpeg_path = os.path.join(script_dir, "ffmpeg.exe")
-if os.path.exists(ffmpeg_path):
-    os.environ["PATH"] = script_dir + os.pathsep + os.environ.get("PATH", "")
+if platform.system() == "Windows":
+    ffmpeg_path = os.path.join(script_dir, "ffmpeg.exe")
+    if os.path.exists(ffmpeg_path):
+        os.environ["PATH"] = script_dir + os.pathsep + os.environ.get("PATH", "")
+# På Linux/Mac förväntas ffmpeg vara installerat via pakethanteraren
 
 class Diktafon:
     def __init__(self):

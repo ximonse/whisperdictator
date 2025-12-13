@@ -44,6 +44,61 @@ Röstinspelning med automatisk transkribering. Håll inne en knappkombination, p
 
 ---
 
+## Installation (Linux/Ubuntu)
+
+### Steg 1: Ladda ner Whisperdictator
+
+1. Klicka på den gröna knappen **"Code"** högst upp på denna sida
+2. Välj **"Download ZIP"**
+3. Packa upp ZIP-filen där du vill ha den
+
+Eller via terminal:
+```bash
+git clone https://github.com/ximonse/whisperdictator.git
+cd whisperdictator
+```
+
+### Steg 2: Kör installationsskriptet
+
+```bash
+chmod +x install.sh
+./install.sh
+```
+
+Skriptet installerar automatiskt:
+- Python 3 och pip
+- tkinter (för gränssnittet)
+- FFmpeg (för ljudbearbetning)
+- portaudio (för mikrofonåtkomst)
+- Alla Python-paket från requirements.txt
+
+### Steg 3: Starta appen
+
+```bash
+python3 Diktafon.py
+```
+
+Eller:
+```bash
+chmod +x start.sh
+./start.sh
+```
+
+**Tips:** Första gången tar det ~1-2 minuter att ladda (AI-modellen laddas ner).
+
+---
+
+## Installation (macOS)
+
+Samma som Linux, men du behöver **Homebrew** installerat först:
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+```
+
+Sen kör du `./install.sh` som vanligt.
+
+---
+
 ## Användning
 
 ### Spela in med tangentbord (rekommenderat)
@@ -67,11 +122,26 @@ Röstinspelning med automatisk transkribering. Håll inne en knappkombination, p
 
 ## Felsökning
 
+### Windows
+
 **"Python hittas inte"**
 → Du glömde kryssa i "Add Python to PATH". Avinstallera Python och installera igen, kryssa i rutan.
 
 **"FFmpeg saknas"**
 → Kör `Installera_Allt.bat` igen, eller installera FFmpeg manuellt från https://ffmpeg.org
+
+### Linux
+
+**"No module named tkinter"**
+→ Installera tkinter: `sudo apt install python3-tk`
+
+**"No module named pyaudio" eller "portaudio.h not found"**
+→ Installera portaudio: `sudo apt install portaudio19-dev` och sedan `pip3 install pyaudio`
+
+**"ALSA lib" varningar**
+→ Ignorera dessa - appen fungerar ändå. Det är bara Linux som klagar på ljudkonfiguration.
+
+### Alla system
 
 **Appen fryser vid start**
 → Normalt första gången! AI-modellen (~500 MB) laddas ner. Vänta 1-2 minuter.
