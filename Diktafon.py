@@ -57,6 +57,7 @@ class Diktafon:
         
         # Ljudinspelning variabler (sounddevice)
         self.audio_frames = []
+        self.audio_segments = []  # Sparar separata segment vid paus
         self.audio_file_path = None
         self.stream = None
         
@@ -195,6 +196,7 @@ class Diktafon:
         self.is_recording = True
         self.is_paused = False
         self.audio_frames = []  # Rensa tidigare inspelning
+        self.audio_segments = []  # Rensa tidigare segment
         
         # Starta timer - nollställ bara vid NY inspelning
         self.recording_start_time = time.time()
@@ -248,7 +250,10 @@ class Diktafon:
         self.rec_button.config(text="▶", relief='raised')
         
         # Pausa ljudinspelning (sounddevice hanteras via is_paused flaggan)
-        # Ingen explicit stopp behövs - callback ignorerar data när is_paused=True
+        # Spara nuvarande segment vid paus
+        if self.audio_frames:
+            self.audio_segments.append(self.audio_frames.copy())
+            self.audio_frames = []
         
         print("Pausar inspelning...")
         
@@ -449,48 +454,95 @@ class Diktafon:
     
     def save_and_transcribe(self):
         """Spara ljudfil och starta transkription"""
-        if not self.audio_frames:
+        # Lägg till sista segmentet om det finns frames kvar
+        if self.audio_frames:
+            self.audio_segments.append(self.audio_frames.copy())
+            self.audio_frames = []
+        
+        if not self.audio_segments:
             self.stop_status_progress("Ingen audio", 'red')
             return
         
-        # Kombinera numpy arrays till en
-        total_audio_data = np.concatenate(self.audio_frames, axis=0)
-        if len(total_audio_data) < 1600:  # Minst 0.1 sekund
-            self.stop_status_progress("För kort inspelning", 'orange')
-            return
-            
-        # Skapa fil för ljudet i ljudfiler-mappen
         script_dir = os.path.dirname(os.path.abspath(__file__))
         audio_dir = os.path.join(script_dir, "recordings")
         os.makedirs(audio_dir, exist_ok=True)
         
-        # Timestamp för unikt filnamn
         import datetime
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        self.audio_file_path = os.path.join(audio_dir, f"recording_{timestamp}.wav")
+        import scipy.io.wavfile as wavfile
         
-        try:
-            # Spara WAV-fil (sounddevice/numpy)
-            import scipy.io.wavfile as wavfile
-            wavfile.write(self.audio_file_path, self.rate, total_audio_data)
+        all_transcriptions = []
+        
+        # Transkribera varje segment separat
+        for i, segment in enumerate(self.audio_segments):
+            if not segment:
+                continue
             
-            print(f"Ljudfil sparad: {self.audio_file_path}")
-            print(f"Audio-data storlek: {len(total_audio_data)} bytes")
+            # Kombinera numpy arrays till en
+            segment_audio = np.concatenate(segment, axis=0)
             
-            # Transkribera med Whisper
-            self.transcribe_with_whisper()
+            if len(segment_audio) < 1600:  # Minst 0.1 sekund
+                continue
             
-        except Exception as e:
-            print(f"Kunde inte spara ljudfil: {e}")
-            print(f"Feltyp: {type(e)}")
-            import traceback
-            traceback.print_exc()
-            self.stop_status_progress("Sparfel", 'red')
-    
+            # Spara segment till temporär fil
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            segment_path = os.path.join(audio_dir, f"segment_{timestamp}_{i}.wav")
+            
+            try:
+                wavfile.write(segment_path, self.rate, segment_audio)
+                
+                # Transkribera segmentet
+                if self.whisper_model:
+                    result = self.whisper_model.transcribe(
+                        segment_path,
+                        language="sv",
+                        verbose=False,
+                        temperature=0,
+                        best_of=1,
+                        beam_size=1,
+                        word_timestamps=False,
+                        condition_on_previous_text=False
+                    )
+                    text = result["text"].strip()
+                    if text:
+                        all_transcriptions.append(text)
+                
+                # Ta bort temporär fil
+                os.remove(segment_path)
+                
+            except Exception as e:
+                print(f"Segment {i} fel: {e}")
+        
+        # Sätt ihop alla transkriberingar med dubbla radbyten
+        separator = chr(10) + chr(10)  # Två radbrytningar
+        self.transcribed_text = separator.join(all_transcriptions)
+        
+        if self.transcribed_text:
+            self.save_transcription()
+            try:
+                pyperclip.copy(self.transcribed_text)
+                print("Transkription kopierad till urklipp")
+            except Exception as e:
+                print(f"Kunde inte kopiera: {e}")
+            
+            self.stop_status_progress("✓ KLART", 'green')
+            self.ai_button.config(state='normal', bg='#90EE90', fg='#006400')
+            print(f"Transkription: {self.transcribed_text}")
+        else:
+            self.stop_status_progress("Inget tal", 'orange')
+        
+        self.blink_completion()
+        
+        def reset_status():
+            time.sleep(3)
+            self.status_label.config(text="Redo", fg='black')
+        threading.Thread(target=reset_status, daemon=True).start()
+
+
     def clear_recording(self):
         self.is_recording = False
         self.is_paused = False
         self.audio_frames = []
+        self.audio_segments = []
         self.transcribed_text = ""
         
         # Stäng stream om öppen (sounddevice)
