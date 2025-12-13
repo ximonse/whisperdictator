@@ -1,4 +1,6 @@
 openai-whisper
-pyaudio
+sounddevice
+scipy
+numpy
 pyperclip
 pynput

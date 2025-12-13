@@ -3,7 +3,8 @@ from tkinter import ttk
 import threading
 import time
 import pyperclip
-import pyaudio
+import sounddevice as sd
+import numpy as np
 import wave
 import tempfile
 import os
@@ -54,17 +55,15 @@ class Diktafon:
         self.hotkey_callback = None
         self.hotkey_recording = False
         
-        # Ljudinspelning variabler
-        self.audio = pyaudio.PyAudio()
-        self.stream = None
+        # Ljudinspelning variabler (sounddevice)
         self.audio_frames = []
         self.audio_file_path = None
+        self.stream = None
         
         # Ljudinställningar - Whisper-vänligt format
-        self.chunk = 1024
-        self.format = pyaudio.paInt16
         self.channels = 1  # Mono
         self.rate = 16000  # 16kHz för Whisper
+        self.dtype = np.int16
         
         # Ladda Whisper-modell (görs en gång)
         self.whisper_model = None
@@ -207,19 +206,29 @@ class Diktafon:
         self.rec_button.config(text="⏸", relief='sunken')
         self.stop_button.config(state='normal')
         
-        # Starta ljudinspelning
+        # Starta ljudinspelning (sounddevice)
         try:
-            self.stream = self.audio.open(
-                format=self.format,
-                channels=self.channels,
-                rate=self.rate,
-                input=True,
-                frames_per_buffer=self.chunk
-            )
+            def audio_callback(indata, frames, time_info, status):
+                if self.is_recording and not self.is_paused:
+                    self.audio_frames.append(indata.copy())
             
-            # Starta inspelning i separat tråd
-            self.recording_thread = threading.Thread(target=self.record_audio, daemon=True)
-            self.recording_thread.start()
+            # Hitta första input-device
+            input_device = sd.default.device[0]
+            if input_device is None or input_device < 0:
+                # Sök efter första device med input
+                for i, dev in enumerate(sd.query_devices()):
+                    if dev['max_input_channels'] > 0:
+                        input_device = i
+                        break
+            
+            self.stream = sd.InputStream(
+                device=input_device,
+                samplerate=self.rate,
+                channels=self.channels,
+                dtype=self.dtype,
+                callback=audio_callback
+            )
+            self.stream.start()
             
             print("Startar inspelning...")
             
@@ -238,12 +247,8 @@ class Diktafon:
         self.status_label.config(text="⏸ PAUSAD", fg='orange')
         self.rec_button.config(text="▶", relief='raised')
         
-        # Pausa ljudinspelning säkert
-        try:
-            if self.stream and self.stream.is_active():
-                self.stream.stop_stream()
-        except Exception as e:
-            print(f"Pausfel: {e}")
+        # Pausa ljudinspelning (sounddevice hanteras via is_paused flaggan)
+        # Ingen explicit stopp behövs - callback ignorerar data när is_paused=True
         
         print("Pausar inspelning...")
         
@@ -256,14 +261,8 @@ class Diktafon:
         self.status_label.config(text="● SPELAR IN", fg='red')
         self.rec_button.config(text="⏸", relief='sunken')
         
-        # Återuppta ljudinspelning säkert
-        try:
-            if self.stream and hasattr(self.stream, '_stream') and not self.stream.is_active():
-                self.stream.start_stream()
-        except Exception as e:
-            print(f"Återupptagningsfel: {e}")
-            # Om stream är trasig, skapa ny
-            self.start_new_stream()
+        # Återuppta ljudinspelning (sounddevice hanteras via is_paused flaggan)
+        # Ingen explicit start behövs - callback samlar data när is_paused=False
         
         print("Återupptar inspelning...")
         
@@ -280,11 +279,10 @@ class Diktafon:
         
         self.status_label.config(text="⏳ SPARAR...", fg='blue')
         
-        # Stoppa ljudinspelning säkert
+        # Stoppa ljudinspelning (sounddevice)
         try:
             if self.stream:
-                if hasattr(self.stream, '_stream') and self.stream.is_active():
-                    self.stream.stop_stream()
+                self.stream.stop()
                 self.stream.close()
                 self.stream = None
         except Exception as e:
@@ -333,8 +331,8 @@ class Diktafon:
                 language="sv",  # Svenska
                 verbose=False,
                 temperature=0,  # Mer deterministisk
-                best_of=5,      # Fler försök för bättre kvalitet
-                beam_size=5,    # Bättre sökning
+                best_of=1,      # Fler försök för bättre kvalitet
+                beam_size=1,    # Bättre sökning
                 word_timestamps=False,
                 condition_on_previous_text=False  # Undvik driftning
             )
@@ -408,43 +406,42 @@ class Diktafon:
             print(f"Kunde inte spara transkription: {e}")
         
     def record_audio(self):
-        """Kontinuerlig ljudinspelning i separat tråd"""
-        while self.is_recording:
-            if not self.is_paused and self.stream:
-                try:
-                    # Kontrollera stream-status säkert
-                    if hasattr(self.stream, '_stream') and self.stream.is_active():
-                        data = self.stream.read(self.chunk, exception_on_overflow=False)
-                        self.audio_frames.append(data)
-                    else:
-                        time.sleep(0.1)
-                except Exception as e:
-                    print(f"Inspelningsfel: {e}")
-                    break
-            else:
-                time.sleep(0.1)  # Vänta om pausad
+        """Inte längre använd - sounddevice callback hanterar inspelning"""
+        pass
     
     def start_new_stream(self):
-        """Skapa ny stream om den gamla är trasig"""
+        """Skapa ny stream om den gamla är trasig (sounddevice)"""
         try:
             if self.stream:
                 try:
-                    if hasattr(self.stream, '_stream'):
-                        self.stream.close()
+                    self.stream.close()
                 except:
                     pass
                 self.stream = None
             
-            # Vänta lite innan vi skapar ny stream
             time.sleep(0.1)
             
-            self.stream = self.audio.open(
-                format=self.format,
+            def audio_callback(indata, frames, time_info, status):
+                if self.is_recording and not self.is_paused:
+                    self.audio_frames.append(indata.copy())
+            
+            # Hitta första input-device
+            input_device = sd.default.device[0]
+            if input_device is None or input_device < 0:
+                # Sök efter första device med input
+                for i, dev in enumerate(sd.query_devices()):
+                    if dev['max_input_channels'] > 0:
+                        input_device = i
+                        break
+            
+            self.stream = sd.InputStream(
+                device=input_device,
+                samplerate=self.rate,
                 channels=self.channels,
-                rate=self.rate,
-                input=True,
-                frames_per_buffer=self.chunk
+                dtype=self.dtype,
+                callback=audio_callback
             )
+            self.stream.start()
             print("Ny stream skapad")
         except Exception as e:
             print(f"Kunde inte skapa ny stream: {e}")
@@ -456,9 +453,9 @@ class Diktafon:
             self.stop_status_progress("Ingen audio", 'red')
             return
         
-        # Kontrollera att vi har tillräckligt med audio-data
-        total_audio_data = b''.join(self.audio_frames)
-        if len(total_audio_data) < self.chunk * 10:  # Minst 10 chunks
+        # Kombinera numpy arrays till en
+        total_audio_data = np.concatenate(self.audio_frames, axis=0)
+        if len(total_audio_data) < 1600:  # Minst 0.1 sekund
             self.stop_status_progress("För kort inspelning", 'orange')
             return
             
@@ -473,12 +470,9 @@ class Diktafon:
         self.audio_file_path = os.path.join(audio_dir, f"recording_{timestamp}.wav")
         
         try:
-            # Spara WAV-fil
-            with wave.open(self.audio_file_path, 'wb') as wf:
-                wf.setnchannels(self.channels)
-                wf.setsampwidth(self.audio.get_sample_size(self.format))
-                wf.setframerate(self.rate)
-                wf.writeframes(total_audio_data)
+            # Spara WAV-fil (sounddevice/numpy)
+            import scipy.io.wavfile as wavfile
+            wavfile.write(self.audio_file_path, self.rate, total_audio_data)
             
             print(f"Ljudfil sparad: {self.audio_file_path}")
             print(f"Audio-data storlek: {len(total_audio_data)} bytes")
@@ -499,11 +493,10 @@ class Diktafon:
         self.audio_frames = []
         self.transcribed_text = ""
         
-        # Stäng stream om öppen - säkert
+        # Stäng stream om öppen (sounddevice)
         try:
             if self.stream:
-                if hasattr(self.stream, '_stream') and self.stream.is_active():
-                    self.stream.stop_stream()
+                self.stream.stop()
                 self.stream.close()
                 self.stream = None
         except Exception as e:
@@ -757,15 +750,8 @@ class Diktafon:
         """Städa upp resurser vid stängning"""
         if self.stream:
             try:
-                if self.stream.is_active():
-                    self.stream.stop_stream()
+                self.stream.stop()
                 self.stream.close()
-            except:
-                pass
-        
-        if hasattr(self, 'audio'):
-            try:
-                self.audio.terminate()
             except:
                 pass
         
